@@ -1,0 +1,37 @@
+# ═══ AURA BACKEND v5 — variabili d'ambiente ═══
+# Copia questo file in .env per lo sviluppo locale.
+# Su Railway: Settings → Variables (una per riga).
+
+# Postgres (Railway lo genera quando colleghi il plugin Postgres)
+DATABASE_URL=
+
+# Password del pannello Microwade (scegli una password lunga e unica)
+ADMIN_PASSWORD=
+
+# Stripe (dashboard.stripe.com → Developers → API keys)
+STRIPE_SECRET_KEY=
+# Webhook: dashboard.stripe.com → Developers → Webhooks → endpoint /webhook
+STRIPE_WEBHOOK_SECRET=
+# Apple Pay: contenuto del file di verifica dominio Stripe (opzionale)
+APPLE_PAY_DOMAIN_FILE=
+
+# Anthropic (chatbot, traduzioni, analisi Ads)
+ANTHROPIC_API_KEY=
+
+# Recensioni Google (Places API)
+# 1. console.cloud.google.com → crea progetto → abilita "Places API" → crea API key
+# 2. Place ID: https://developers.google.com/maps/documentation/places/web-service/place-id
+#    (cerca "Maximo Tours" nel Place ID Finder)
+GOOGLE_MAPS_API_KEY=
+GOOGLE_PLACE_ID=
+
+# Resend (email transazionali) — richiede dominio verificato
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=Maximo Tours <noreply@maximotours.it>
+ADMIN_EMAIL=
+
+# Pubblici
+SITE_URL=https://maximotours.it
+PUBLIC_WHATSAPP_HREF=https://wa.me/393206891014
+PUBLIC_WHATSAPP=+39 320 689 1014
+PUBLIC_PHONE=

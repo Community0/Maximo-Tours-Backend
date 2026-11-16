@@ -1,0 +1,1 @@
+# Railway uses the Dockerfile with Node 24. No legacy Node 20 override.

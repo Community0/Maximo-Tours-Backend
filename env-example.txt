@@ -1,0 +1,21 @@
+# Required on Railway. In the backend service, reference the Postgres service:
+# DATABASE_URL=${{Postgres.DATABASE_URL}}
+# Replace Postgres with the exact database service name in Railway.
+DATABASE_URL=
+NODE_ENV=production
+# Choose a unique random password of 32-128 characters. Never commit it.
+ADMIN_PASSWORD=
+SITE_URL=https://maximotours.it
+ALLOWED_ORIGINS=https://maximotours.it,https://www.maximotours.it
+# false for Railway private networking; true only with trusted SSL certificates.
+PG_SSL=false
+PUBLIC_PHONE=+39 320 689 1014
+PUBLIC_WHATSAPP=+39 320 689 1014
+PUBLIC_WHATSAPP_HREF=https://wa.me/393206891014
+
+# Optional email notifications: configure all three to enable delivery.
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+ADMIN_EMAIL=
+REPLY_TO_EMAIL=
+# PORT is injected by Railway. Locally its default is 8080.
