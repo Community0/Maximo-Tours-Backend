@@ -46,7 +46,7 @@ router.get('/ogre/api/overview',wrap(async(req,res)=>{
  COALESCE(SUM(amount-COALESCE(refunded_cents,0)/100.0) FILTER(WHERE payment_status IN ('paid','partially_refunded','refund_pending')),0) AS collected
  FROM bookings WHERE channel='maximo-web'`);
  const mail=await getPool().query("SELECT COUNT(*) AS pending FROM notification_outbox WHERE status='pending'");
- res.json({...r.rows[0],notificationsPending:Number(mail.rows[0].pending),emailConfigured:!!(config.resendApiKey&&config.resendFromEmail&&config.adminEmail),paymentsEnabled:config.paymentReady(),fleetSize:config.fleetSize});
+ res.json({...r.rows[0],notificationsPending:Number(mail.rows[0].pending),emailConfigured:!!(config.resendApiKey&&config.resendFromEmail&&config.adminEmail),paymentsEnabled:config.paymentReady(),paymentMode:config.paymentMode(),paymentVerification:config.stripeWebhookSecret?'api-and-webhook':'api-polling',fleetSize:config.fleetSize});
 }));
 router.post('/ogre/api/requests/:id',wrap(async(req,res)=>{
  const {status,paymentStatus,notes,version}=req.body||{};

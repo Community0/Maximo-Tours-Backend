@@ -23,7 +23,10 @@ const config={
 config.siteUrl=config.siteUrl.replace(/\/$/,'');
 if(!Number.isInteger(config.fleetSize)||config.fleetSize<1||config.fleetSize>100)throw new Error('Invalid GOLF_CART_COUNT');
 if(config.timeSlots.some(v=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)))throw new Error('Invalid BOOKING_TIME_SLOTS');
-config.paymentReady=()=>config.paymentsEnabled&&!!(config.stripeSecretKey&&config.stripeWebhookSecret);
+// Stripe is verified through its API, including by the background reconciliation worker.
+// A signed webhook is an optional additional trigger, not a prerequisite for payments.
+config.paymentReady=()=>config.paymentsEnabled&&!!config.stripeSecretKey;
+config.paymentMode=()=>config.stripeSecretKey.startsWith('sk_live_')?'live':config.stripeSecretKey.startsWith('sk_test_')?'test':'unconfigured';
 config.allowedOrigins=(process.env.ALLOWED_ORIGINS||'https://maximotours.it,https://www.maximotours.it').split(',').map(v=>v.trim()).filter(Boolean);
 config.corsOriginOk=origin=>!origin||config.allowedOrigins.includes(origin);
 if(process.env.NODE_ENV==='production'&&(!config.databaseUrl||config.adminPassword.length<32))throw new Error('DATABASE_URL and ADMIN_PASSWORD (32+ characters) required');

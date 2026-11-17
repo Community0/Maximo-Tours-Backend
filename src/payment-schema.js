@@ -12,6 +12,8 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_refund_id TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_checked_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS bookings_stripe_checked ON bookings(stripe_checked_at) WHERE payment_method='stripe';
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_access_token ON bookings(access_token);
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_stripe_session ON bookings(checkout_session_id);
 CREATE UNIQUE INDEX IF NOT EXISTS bookings_stripe_payment ON bookings(stripe_payment_id);

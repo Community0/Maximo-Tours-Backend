@@ -13,9 +13,10 @@ PUBLIC_PHONE=+39 320 689 1014
 PUBLIC_WHATSAPP=+39 320 689 1014
 PUBLIC_WHATSAPP_HREF=https://wa.me/393206891014
 
-# Stripe: start in test mode. Enable only after configuring keys and webhook.
+# Stripe: secret key + PAYMENTS_ENABLED=true. Webhook is optional.
 PAYMENTS_ENABLED=false
 STRIPE_SECRET_KEY=
+# Optional: leave empty for direct Stripe API verification.
 STRIPE_WEBHOOK_SECRET=
 GOLF_CART_COUNT=8
 BOOKING_TIME_SLOTS=09:00,10:30,12:00,14:30,16:00,17:30,19:00,20:30

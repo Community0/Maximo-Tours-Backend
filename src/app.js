@@ -25,7 +25,7 @@ app.use('/ogre', (req,res,next)=>{res.set('X-Robots-Tag','noindex, nofollow');re
 app.get('/booking/config',(req,res)=>res.json({paymentsEnabled:config.paymentReady(),timeZone:'Europe/Rome',cancellationHours:24,minimumNoticeHours:2,termsVersion:config.termsVersion}));
 app.get('/availability',asyncRoute(async(req,res)=>res.json(await require('./services/availability').availability(getPool(),{tourId:req.query.tourId,date:req.query.date,extraStops:Number(req.query.extraStops||0)}))));
 app.post('/checkout/session',bookingLimiter,asyncRoute(async(req,res)=>res.json(await payments.beginCheckout(req.body))));
-app.post('/booking/status',asyncRoute(async(req,res)=>{const row=await payments.tokenBooking(req.body?.token);res.json({...payments.publicBooking(row),checkoutUrl:row.checkout_state==='open'?row.checkout_url:null});}));
+app.post('/booking/status',asyncRoute(async(req,res)=>{const row=await payments.refreshBooking(req.body?.token);res.json({...payments.publicBooking(row),checkoutUrl:row.checkout_state==='open'?row.checkout_url:null});}));
 app.post('/booking/cancel',bookingLimiter,asyncRoute(async(req,res)=>{if(req.body?.confirmed!==true)return res.status(422).json({error:'CONFIRM_CANCELLATION'});res.json(await payments.cancelBooking(req.body?.token));}));
 app.get('/health',asyncRoute(async(req,res)=>{
  try{if(!getPool())throw new Error();await getPool().query('SELECT 1');res.json({status:'ok',service:'maximo-tours'});}

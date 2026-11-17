@@ -62,10 +62,10 @@ async function syncSession(sessionId,eventId){
  const id=session.metadata?.bookingId;
  if(!id?.startsWith('MX'))return;
  const intentId=typeof session.payment_intent==='string'?session.payment_intent:session.payment_intent?.id;
- let charge;
+ let charge,intent;
  if(intentId&&session.payment_status==='paid'){
-  const pi=await stripe().paymentIntents.retrieve(intentId,{expand:['latest_charge']});
-  charge=typeof pi.latest_charge==='object'?pi.latest_charge:null;
+  intent=await stripe().paymentIntents.retrieve(intentId,{expand:['latest_charge']});
+  charge=typeof intent.latest_charge==='object'?intent.latest_charge:null;
  }
  const client=await getPool().connect();
  try{await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(78243191)');
@@ -73,6 +73,7 @@ async function syncSession(sessionId,eventId){
   if(!row){await client.query('COMMIT');return;}
   if((row.checkout_session_id&&row.checkout_session_id!==session.id)||session.client_reference_id!==row.id||session.mode!=='payment'||session.currency!=='eur'||session.amount_total!==row.stripe_amount_cents||session.livemode!==config.stripeSecretKey.startsWith('sk_live_'))throw failure(409,'PAYMENT_MISMATCH');
   if(session.payment_status==='paid'){
+   if(session.status!=='complete'||!intent||intent.status!=='succeeded'||intent.currency!=='eur'||intent.amount_received!==row.stripe_amount_cents||intent.metadata?.bookingId!==row.id)throw failure(409,'PAYMENT_MISMATCH');
    const refunded=Math.max(row.refunded_cents,charge?.amount_refunded||0),full=refunded>=row.stripe_amount_cents;
    const payment=full?'refunded':refunded?'partially_refunded':row.payment_status==='refund_failed'?'refund_failed':row.refund_requested_at?'refund_pending':'paid';
    const status=full?'cancelled':row.status==='completed'?'completed':'confirmed';
@@ -144,30 +145,57 @@ async function approveRefund(id,input,admin){
  }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
  return publicBooking(await finishRefund(row,true));
 }
+async function reconcileRow(row){
+ if(row.checkout_state==='creating'){
+  if(+new Date(row.checkout_expires_at)-Date.now()>=31*60000&&+new Date(row.created_at)+23*3600000>Date.now())row=await ensureSession(row);
+  else{
+   // A timed-out create may have succeeded. Search Stripe before releasing inventory,
+   // even after a long outage. Never create another session after idempotency expires.
+   let cursor,exhausted=false,found;
+   for(let page=0;page<5;page++){
+    const list=await stripe().checkout.sessions.list({created:{gte:Math.floor(+new Date(row.created_at)/1000)-5,lte:Math.ceil(+new Date(row.checkout_expires_at)/1000)},limit:100,...(cursor?{starting_after:cursor}:{})});
+    found=list.data.find(s=>s.client_reference_id===row.id);
+    if(found)break;
+    if(!list.has_more){exhausted=true;break;}
+    cursor=list.data.at(-1)?.id;if(!cursor)break;
+   }
+   if(found){
+    await getPool().query("UPDATE bookings SET checkout_session_id=$2,checkout_url=$3,checkout_state=CASE WHEN checkout_state='creating' THEN 'open' ELSE checkout_state END WHERE id=$1",[row.id,found.id,found.url]);
+    row.checkout_session_id=found.id;
+   }else if(exhausted&&+new Date(row.checkout_expires_at)<Date.now())await getPool().query("UPDATE bookings SET checkout_state='expired',status='cancelled' WHERE id=$1 AND checkout_state='creating'",[row.id]);
+  }
+ }
+ if(row.checkout_session_id)await syncSession(row.checkout_session_id);
+ // Observes an already approved refund; allowCreate remains false.
+ if(row.refund_requested_at)await finishRefund(row);
+}
+async function refreshBooking(token){
+ let row=await tokenBooking(token);
+ if(!config.stripeSecretKey||row.payment_method!=='stripe'||['expired'].includes(row.checkout_state)||row.payment_status==='refunded')return row;
+ // Atomic cross-process claim limits repeated client polling. A redirect never marks a
+ // booking paid: only a verified Stripe API response can do that.
+ const claimed=await getPool().query("UPDATE bookings SET stripe_checked_at=NOW() WHERE id=$1 AND (stripe_checked_at IS NULL OR stripe_checked_at<NOW()-INTERVAL '5 seconds') RETURNING *",[row.id]);
+ if(claimed.rows.length){
+  try{await reconcileRow(claimed.rows[0]);}
+  catch{console.error('Payment verification pending:',row.id);}
+  row=await tokenBooking(token);
+ }
+ return row;
+}
 let reconcileBusy=false;
 async function reconcile(){
  if(reconcileBusy||!config.stripeSecretKey||!getPool())return;reconcileBusy=true;
  try{
-  const rows=(await getPool().query(`SELECT * FROM bookings WHERE payment_method='stripe' AND (checkout_state IN ('creating','open') OR payment_status='refund_pending') ORDER BY updated_at LIMIT 25`)).rows;
-  for(let row of rows){try{
-   if(row.checkout_state==='creating'){
-    // Retry the exact create call, including after a timeout. Stripe retains the idempotency key for 24h.
-    if(+new Date(row.created_at)+23*3600000>Date.now()){
-     const paramsTime=+new Date(row.checkout_expires_at)-Date.now();
-     if(paramsTime>=31*60000)row=await ensureSession(row);
-     else{
-      // Resolve a possibly created session before releasing inventory. No blind expiry of holds.
-      const list=await stripe().checkout.sessions.list({created:{gte:Math.floor(+new Date(row.created_at)/1000)-5},limit:100});
-      const found=list.data.find(s=>s.client_reference_id===row.id);
-      if(found){await getPool().query('UPDATE bookings SET checkout_session_id=$2,checkout_state=$3 WHERE id=$1',[row.id,found.id,'open']);row.checkout_session_id=found.id;}
-      else if(!list.has_more&&+new Date(row.checkout_expires_at)<Date.now())await getPool().query("UPDATE bookings SET checkout_state='expired',status='cancelled' WHERE id=$1 AND checkout_state='creating'",[row.id]);
-     }
-    }
-   }
-   if(row.checkout_session_id)await syncSession(row.checkout_session_id);
-   if(row.refund_requested_at)await finishRefund(row);
-  }catch{console.error('Payment reconciliation pending:',row.id);}}
+  // Claim before checking, including failures and unpaid sessions, so an old batch
+  // cannot starve newer payments. Claims also coordinate multiple Railway replicas.
+  const rows=(await getPool().query(`WITH due AS (
+   SELECT id FROM bookings WHERE payment_method='stripe' AND (
+    ((checkout_state IN ('creating','open') OR payment_status='refund_pending') AND (stripe_checked_at IS NULL OR stripe_checked_at<NOW()-INTERVAL '10 seconds'))
+    OR (payment_status IN ('paid','partially_refunded') AND (stripe_checked_at IS NULL OR stripe_checked_at<NOW()-INTERVAL '15 minutes'))
+   ) ORDER BY stripe_checked_at ASC NULLS FIRST,created_at,id LIMIT 25 FOR UPDATE SKIP LOCKED
+  ) UPDATE bookings b SET stripe_checked_at=NOW() FROM due WHERE b.id=due.id RETURNING b.*`)).rows;
+  for(const row of rows){try{await reconcileRow(row);}catch{console.error('Payment reconciliation pending:',row.id);}}
  }finally{reconcileBusy=false;}
 }
-function startReconciliation(){const timer=setInterval(()=>reconcile().catch(()=>console.error('Payment reconciliation unavailable')),30000);timer.unref();reconcile().catch(()=>{});return ()=>clearInterval(timer);}
-module.exports={beginCheckout,webhook,tokenBooking,publicBooking,cancelBooking,approveRefund,syncSession,startReconciliation,reconcile,manageURL,queue};
+function startReconciliation(){const timer=setInterval(()=>reconcile().catch(()=>console.error('Payment reconciliation unavailable')),10000);timer.unref();reconcile().catch(()=>{});return ()=>clearInterval(timer);}
+module.exports={beginCheckout,webhook,tokenBooking,refreshBooking,publicBooking,cancelBooking,approveRefund,syncSession,startReconciliation,reconcile,manageURL,queue};

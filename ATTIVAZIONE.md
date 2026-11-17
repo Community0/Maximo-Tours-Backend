@@ -1,4 +1,4 @@
-# Maximo Tours — attivazione del 17 novembre 2026
+# Maximo Tours — attivazione 1.2.0, 17 novembre 2026
 
 ## 1. GitHub e Railway
 
@@ -23,7 +23,7 @@ Nel servizio **backend → Variables**, inserisci:
 | `BOOKING_TIME_SLOTS` | `09:00,10:30,12:00,14:30,16:00,17:30,19:00,20:30` |
 | `PAYMENTS_ENABLED` | inizialmente `false`; `true` dopo la configurazione e il collaudo |
 | `STRIPE_SECRET_KEY` | chiave segreta del tuo account Stripe (`sk_test_…` nel collaudo, `sk_live_…` per incassi reali) |
-| `STRIPE_WEBHOOK_SECRET` | segreto `whsec_…` dell’endpoint configurato nel punto 2 |
+| `STRIPE_WEBHOOK_SECRET` | **facoltativa: lascia vuota o ometti**. Il server verifica Stripe direttamente con la chiave segreta |
 | `RESEND_API_KEY` | chiave Resend con permesso di invio limitato a `notify.maximotours.it` |
 | `RESEND_FROM_EMAIL` | `Maximo Tours <booking@notify.maximotours.it>` |
 | `ADMIN_EMAIL` | `info@maximotours.it` |
@@ -35,23 +35,17 @@ Controlla che `https://web-production-1a25fad7.up.railway.app/health` restituisc
 
 ## 2. Stripe
 
-1. Durante il collaudo usa l’ambiente di test Stripe e un database/backend separato da quello operativo.
-2. In Workbench → Webhooks crea una destinazione per **il tuo account**, formato **Snapshot**, versione API `2024-12-18.acacia`.
-3. URL: `https://web-production-1a25fad7.up.railway.app/webhooks/stripe` (per il collaudo usa l’URL del backend di test).
-4. Seleziona gli eventi:
-   - `checkout.session.completed`
-   - `checkout.session.expired`
-   - `checkout.session.async_payment_succeeded`
-   - `checkout.session.async_payment_failed`
-   - `charge.refunded`
-   - `refund.updated`
-   - `refund.failed`
-5. Copia il segreto di firma dell’endpoint in `STRIPE_WEBHOOK_SECRET`. È diverso dalla chiave API.
-6. In Branding imposta nome Maximo Tours, logo del sito e pulsante nero. Carte e Apple Pay vengono mostrati da Stripe quando disponibili per account, browser e dispositivo.
-7. Completa il collaudo end-to-end di pagamento, ricezione webhook, email, accesso `/ogre` e rimborso approvato manualmente. Gli attuali test locali simulano Stripe: non sostituiscono questa prova con il tuo account.
-8. Per gli incassi reali usa la chiave **live** e un endpoint **live** con il proprio segreto. Imposta `PAYMENTS_ENABLED=true` e ridistribuisci il backend.
+1. Questa versione funziona con **STRIPE_SECRET_KEY** e **PAYMENTS_ENABLED=true**, senza richiedere un webhook. Non serve creare altre chiavi.
+2. Durante il collaudo usa una chiave `sk_test_…` e un database/backend separato da quello operativo. Per gli incassi reali occorre una chiave `sk_live_…` di un account Stripe abilitato ai pagamenti.
+3. In Branding imposta nome Maximo Tours, logo del sito e pulsante nero. Carte e Apple Pay vengono mostrati da Stripe quando disponibili per account, browser e dispositivo.
+4. Verifica una sessione Checkout con il tuo account: pagamento, conferma sul sito, email e prenotazione nel gestionale. Ripeti chiudendo la pagina dopo il pagamento: il processo in background deve comunque confermare la prenotazione.
+5. Per attivare gli incassi reali, carica questa versione su GitHub, lascia la chiave live in Railway e imposta `PAYMENTS_ENABLED=true`. Attendi il deploy prima di verificare `/api/maximo/booking/config`.
 
-Il ritorno dal checkout non è una prova di pagamento: la prenotazione è confermata solo quando il server verifica Stripe. Se il cliente chiude il browser dopo il pagamento, il webhook aggiorna comunque il database. Il processo di riconciliazione recupera notifiche ritardate.
+Il ritorno dal checkout non è una prova di pagamento: il server recupera sessione e pagamento direttamente da Stripe e controlla importo, valuta e riferimento della prenotazione. Al ritorno del cliente effettua una verifica; inoltre un processo ogni 10 secondi cerca pagamenti e sessioni scadute, anche se il browser è chiuso. Con carico o problemi di rete la conferma può richiedere più tempo. Railway deve mantenere il servizio attivo: disabilita l’opzione di sospensione/serverless del servizio web. I controlli ripartono dopo un riavvio senza perdere le prenotazioni.
+
+I rimborsi effettuati dal gestionale sono verificati subito; quelli effettuati direttamente dalla dashboard Stripe sono rilevati dai controlli periodici sulle prenotazioni pagate, normalmente entro circa 15 minuti. Il processo **non avvia mai rimborsi**.
+
+Un webhook firmato rimane supportato come integrazione facoltativa per aggiornamenti più rapidi. Solo se lo aggiungi in futuro, configura la destinazione `/webhooks/stripe` sul dominio Railway, versione API `2024-12-18.acacia`, eventi `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `charge.refunded`, `refund.updated`, `refund.failed`, e il relativo `STRIPE_WEBHOOK_SECRET`. Senza segreto la route rifiuta le notifiche: non accetta richieste non verificate.
 
 ## 3. Email, passo per passo
 
@@ -93,6 +87,6 @@ In Google Search Console aggiungi la proprietà dominio `maximotours.it`, verifi
 
 ## Collaudi ancora necessari nell’ambiente reale
 
-Deploy Railway/PostgreSQL, chiavi Stripe test/live, ricezione dei webhook dell’account, recapito Resend, mailbox Aruba, Search Console e dispositivo iPhone reale. I test locali non sono pagamenti bancari e non certificano la consegna delle email o la fluidità su ogni dispositivo.
+Il 17 novembre sono stati verificati online database, login/logout del gestionale, riepilogo admin e presenza della configurazione email. Restano da completare: deploy di questa versione 1.2.0, prova Stripe con l’account del titolare, recapito Resend, mailbox Aruba, Search Console e dispositivo iPhone reale. I test locali non sono pagamenti bancari e non certificano la consegna delle email o la fluidità su ogni dispositivo.
 
 Fonti operative: https://docs.stripe.com/webhooks · https://docs.stripe.com/checkout/fulfillment · https://resend.com/docs/dashboard/domains/introduction · https://developers.google.com/search/docs/specialty/international/localized-versions

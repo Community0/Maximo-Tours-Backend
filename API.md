@@ -8,11 +8,12 @@ Tutte le risposte operative sono no-store. Importi calcolati dal catalogo server
 - GET `/availability?tourId=roma-iconica&date=YYYY-MM-DD&extraStops=0`: orari e disponibilità; il controllo viene ripetuto in transazione al checkout.
 - POST `/quote`: tourId, people, extraStops, lang. Ritorna totalCents in EUR.
 - POST `/checkout/session`: requestId UUID v4, customer {name,email,phone}, booking {tourId,people,extraStops,date,time,hotel,notes,lang}, privacyAccepted:true, termsAccepted:true, termsVersion, expectedTotalCents. Crea un blocco del golf cart e restituisce URL Stripe e token privato.
-- POST `/booking/status`: {token}. Restituisce solo dati di riepilogo/stato, senza recapiti personali.
+- POST `/booking/status`: {token}. Verifica il pagamento direttamente con Stripe (massimo una verifica per prenotazione ogni 5 secondi) e restituisce solo riepilogo/stato, senza recapiti personali. Se Stripe non risponde, conserva lo stato precedente: non inventa una conferma.
 - POST `/booking/cancel`: {token,confirmed:true}. Registra **solo una richiesta** di cancellazione. Non chiama Stripe Refunds.
-- POST `/webhooks/stripe`: body originale con Stripe-Signature. Endpoint diretto Railway.
+- POST `/webhooks/stripe`: integrazione facoltativa; body originale con Stripe-Signature. Endpoint diretto Railway; senza segreto configurato risponde 503 e non modifica prenotazioni.
 - `/ogre/api/login`, `/ogre/api/session`, `/ogre/api/logout`: login e sessioni admin.
 - GET `/ogre/api/requests`, `/ogre/api/overview`, `/ogre/api/blocked-dates`: prenotazioni, riepilogo, calendario.
+- Il riepilogo admin espone `paymentMode` (`live`, `test`, `unconfigured`) e `paymentVerification` (`api-polling`, `api-and-webhook`), senza chiavi segrete.
 - POST `/ogre/api/requests/:id`: note e stato operativo; pagamenti Stripe protetti da modifica manuale.
 - POST `/ogre/api/requests/:id/refund`: **solo admin autenticato + CSRF**; {confirmed:true,amountCents,version}. Unico percorso applicativo che può avviare un rimborso.
 - POST `/ogre/api/blocked-dates`: {date,blocked,reason}.
