@@ -1,6 +1,6 @@
 const crypto=require('node:crypto');
 const locales=['en','it','fr','es','de'];
-function validateRequest(body,now=new Date()){
+function validateRequest(body,now=new Date(),options={}){
  if(!body||typeof body!=='object')throw new Error('Invalid request');
  const {customer:c,booking:b}=body;
  if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.requestId||''))throw new Error('A UUID v4 requestId is required');
@@ -12,7 +12,7 @@ function validateRequest(body,now=new Date()){
  if(typeof b.date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(b.date))throw new Error('Invalid date');
  const parsed=new Date(b.date+'T12:00:00Z');
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Rome',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
- if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==b.date||b.date<=today||parsed-now>730*86400000)throw new Error('Choose a future date within two years');
+ if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==b.date||(options.allowToday?b.date<today:b.date<=today)||parsed-now>730*86400000)throw new Error('Choose a future date within two years');
  if(typeof b.notes!=='undefined'&&(typeof b.notes!=='string'||b.notes.length>2000))throw new Error('Notes must be at most 2000 characters');
  const hotel=clean(b.hotel,200);if(!hotel)throw new Error('Hotel or pickup address is required');
  if(!Number.isInteger(b.people)||b.people<1||b.people>7)throw new Error('Guests must be 1 to 7');

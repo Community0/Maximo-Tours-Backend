@@ -251,6 +251,7 @@ async function initDB() {
  status TEXT NOT NULL DEFAULT 'pending', attempts INT NOT NULL DEFAULT 0,
  next_attempt TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
  );`);
+ await db.query(require('./payment-schema'));
  await seed();dbReady=true;
 }
 

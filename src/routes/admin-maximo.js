@@ -33,7 +33,7 @@ router.post('/ogre/api/logout',wrap(async(req,res)=>{
 router.get('/ogre/api/requests',wrap(async(req,res)=>{
  const offset=Math.max(0,Math.min(1000000,parseInt(req.query.offset)||0));
  const search=String(req.query.search||'').trim().slice(0,120),status=String(req.query.status||'');
- const result=await getPool().query(`SELECT id,name,email,phone,tour,people,date,notes,notes_admin,status,amount,payment_status,breakdown,created_at,updated_at,
+ const result=await getPool().query(`SELECT id,name,email,phone,tour,people,date,time,start_at,notes,notes_admin,status,amount,payment_method,payment_status,stripe_payment_id,stripe_amount_cents,refunded_cents,cancellation_requested_at,refund_requested_at,checkout_state,breakdown,created_at,updated_at,
  COUNT(*) OVER() AS filtered_count FROM bookings WHERE channel='maximo-web'
  AND ($1='' OR name ILIKE '%'||$1||'%' OR email ILIKE '%'||$1||'%' OR id ILIKE '%'||$1||'%')
  AND ($2='' OR status=$2) ORDER BY date DESC,created_at DESC,id DESC LIMIT 50 OFFSET $3`,[search,status,offset]);
@@ -41,21 +41,22 @@ router.get('/ogre/api/requests',wrap(async(req,res)=>{
 }));
 router.get('/ogre/api/overview',wrap(async(req,res)=>{
  const r=await getPool().query(`SELECT COUNT(*) AS requests,
- COUNT(*) FILTER(WHERE status='pending') AS pending,
+ COUNT(*) FILTER(WHERE status IN ('pending','awaiting_payment')) AS pending,
  COUNT(*) FILTER(WHERE status='confirmed') AS confirmed,
- COALESCE(SUM(amount) FILTER(WHERE payment_status='paid'),0) AS collected
+ COALESCE(SUM(amount-COALESCE(refunded_cents,0)/100.0) FILTER(WHERE payment_status IN ('paid','partially_refunded','refund_pending')),0) AS collected
  FROM bookings WHERE channel='maximo-web'`);
  const mail=await getPool().query("SELECT COUNT(*) AS pending FROM notification_outbox WHERE status='pending'");
- res.json({...r.rows[0],notificationsPending:Number(mail.rows[0].pending),emailConfigured:!!(config.resendApiKey&&config.resendFromEmail&&config.adminEmail)});
+ res.json({...r.rows[0],notificationsPending:Number(mail.rows[0].pending),emailConfigured:!!(config.resendApiKey&&config.resendFromEmail&&config.adminEmail),paymentsEnabled:config.paymentReady(),fleetSize:config.fleetSize});
 }));
 router.post('/ogre/api/requests/:id',wrap(async(req,res)=>{
  const {status,paymentStatus,notes,version}=req.body||{};
- if(!['pending','confirmed','cancelled','completed'].includes(status)||!['unpaid','paid','refunded'].includes(paymentStatus)||typeof notes!=='string'||notes.length>5000||!Number.isFinite(Date.parse(version)))return res.status(422).json({error:'Controlla stato, pagamento e note.'});
+ if(!['pending','awaiting_payment','confirmed','cancelled','completed'].includes(status)||!['unpaid','paid','refunded','partially_refunded','refund_pending','refund_failed'].includes(paymentStatus)||typeof notes!=='string'||notes.length>5000||!Number.isFinite(Date.parse(version)))return res.status(422).json({error:'Controlla stato, pagamento e note.'});
  const client=await getPool().connect();
  try{
   await client.query('BEGIN');
   const previous=await client.query("SELECT * FROM bookings WHERE id=$1 AND channel='maximo-web' FOR UPDATE",[req.params.id]);
   const old=previous.rows[0];if(!old){await client.query('ROLLBACK');return res.status(404).json({error:'Richiesta non trovata.'});}
+  if(old.payment_method==='stripe'&&(paymentStatus!==old.payment_status||(status!==old.status&&!(old.status==='confirmed'&&status==='completed')))){await client.query('ROLLBACK');return res.status(409).json({error:'I pagamenti Stripe si aggiornano automaticamente. Per annullare o rimborsare usa il flusso di cancellazione o Stripe.'});}
   if(new Date(old.updated_at).getTime()!==new Date(version).getTime()){await client.query('ROLLBACK');return res.status(409).json({error:'La richiesta è stata modificata. Ricarica e riprova.'});}
   const updated=await client.query('UPDATE bookings SET status=$1,payment_status=$2,notes_admin=$3,updated_at=NOW() WHERE id=$4 RETURNING updated_at',[status,paymentStatus,notes,req.params.id]);
   await client.query("INSERT INTO audit_log(entity,entity_id,action,before,after) VALUES('booking',$1,'admin_update',$2,$3)",[req.params.id,JSON.stringify({status:old.status,paymentStatus:old.payment_status,notes:old.notes_admin}),JSON.stringify({status,paymentStatus,notes})]);
@@ -63,11 +64,14 @@ router.post('/ogre/api/requests/:id',wrap(async(req,res)=>{
  }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
 }));
 router.get('/ogre/api/blocked-dates',wrap(async(req,res)=>res.json({dates:(await getPool().query('SELECT date,reason FROM blocked_dates ORDER BY date')).rows})));
+router.post('/ogre/api/requests/:id/refund',wrap(async(req,res)=>res.json(await require('../services/payments').approveRefund(req.params.id,req.body,req.admin))));
 router.post('/ogre/api/blocked-dates',wrap(async(req,res)=>{
  const {date,reason,blocked}=req.body||{};
  if(typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||typeof blocked!=='boolean'||(reason!==undefined&&(typeof reason!=='string'||reason.length>200)))return res.status(422).json({error:'Data o motivazione non valida.'});
- if(blocked)await getPool().query('INSERT INTO blocked_dates(date,reason) VALUES($1,$2) ON CONFLICT(date) DO UPDATE SET reason=EXCLUDED.reason',[date,reason||'Non disponibile']);
- else await getPool().query('DELETE FROM blocked_dates WHERE date=$1',[date]);
+ const client=await getPool().connect();try{await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(78243191)');
+ if(blocked)await client.query('INSERT INTO blocked_dates(date,reason) VALUES($1,$2) ON CONFLICT(date) DO UPDATE SET reason=EXCLUDED.reason',[date,reason||'Non disponibile']);
+ else await client.query('DELETE FROM blocked_dates WHERE date=$1',[date]);await client.query('COMMIT');
+ }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e;}finally{client.release();}
  res.json({ok:true});
 }));
 module.exports=router;

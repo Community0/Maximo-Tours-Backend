@@ -13,9 +13,16 @@ PUBLIC_PHONE=+39 320 689 1014
 PUBLIC_WHATSAPP=+39 320 689 1014
 PUBLIC_WHATSAPP_HREF=https://wa.me/393206891014
 
-# Optional email notifications: configure all three to enable delivery.
+# Stripe: start in test mode. Enable only after configuring keys and webhook.
+PAYMENTS_ENABLED=false
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+GOLF_CART_COUNT=8
+BOOKING_TIME_SLOTS=09:00,10:30,12:00,14:30,16:00,17:30,19:00,20:30
+
+# Resend: verified sending subdomain + Aruba inbox, created separately.
 RESEND_API_KEY=
-RESEND_FROM_EMAIL=
-ADMIN_EMAIL=
-REPLY_TO_EMAIL=
+RESEND_FROM_EMAIL=Maximo Tours <booking@notify.maximotours.it>
+ADMIN_EMAIL=info@maximotours.it
+REPLY_TO_EMAIL=info@maximotours.it
 # PORT is injected by Railway. Locally its default is 8080.

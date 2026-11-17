@@ -1,7 +1,7 @@
 {
   "name": "maximo-tours-backend",
-  "version": "1.0.0",
-  "description": "Maximo Tours PostgreSQL booking requests API",
+  "version": "1.1.0",
+  "description": "Maximo Tours bookings, Stripe payments and manual refund administration",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

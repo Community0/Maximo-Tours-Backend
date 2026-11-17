@@ -1,5 +1,3 @@
 # Backup e ripristino
 
-Usare backup PostgreSQL del progetto Maximo e verificare il ripristino su un database separato prima di sostituire quello operativo. Il backend crea lo schema ma non elimina dati.
-
-Le istruzioni storiche del backend originale sono conservate in legacy/RESTORE.md e non vanno applicate automaticamente a Maximo. Il vecchio scheduler di backup via email non viene avviato.
+Eseguire un backup PostgreSQL Railway prima delle migrazioni. Verificare il ripristino su un database separato. Non usare il database Aura per Maximo. Le migrazioni sono additive e non eliminano prenotazioni. Conservare insieme backup database e versione del backend.
