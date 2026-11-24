@@ -83,7 +83,7 @@ test('Stripe checkout: server prices, idempotency, signatures, fleet overlap, re
   await getPool().query('UPDATE bookings SET stripe_checked_at=NULL WHERE id=$1',[directRow.id]);await payments.reconcile();
   assert.equal((await payments.tokenBooking(direct.data.accessToken)).payment_status,'refunded');assert.equal(refundCalls,1);
   // More than one batch: unpaid older sessions cannot starve a paid customer who closed the browser.
-  await getPool().query("UPDATE bookings SET stripe_checked_at=NOW()+INTERVAL '1 hour'");config.fleetSize=100;
+  await getPool().query("UPDATE bookings SET stripe_checked_at=NOW()+INTERVAL '1 hour'");config.fleetSize=100;await getPool().query("INSERT INTO maximo_resources(id,kind,name,seats) SELECT 'test-cart-'||n,'vehicle','Test Cart '||n,7 FROM generate_series(9,100) n");
   const fresh=[];
   for(let i=0;i<26;i++){const req=body();req.booking.date=new Date(Date.now()+14*86400000).toISOString().slice(0,10);const result=await call('/checkout/session',req);assert.equal(result.status,200);fresh.push(await payments.tokenBooking(result.data.accessToken));}
   const last=fresh.at(-1),lastSession=sessions.get(last.checkout_session_id);pay(lastSession);

@@ -35,6 +35,7 @@ async function beginCheckout(body){
  data.time=body.booking.time;data.termsVersion=config.termsVersion;
  const window=windowFor(data),hash=crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
  const quote=await computeQuote(data);if(!quote.ok)throw failure(422,'INVALID_QUOTE');
+ const attribution=await require('./traffic').attribution(body.analytics).catch(()=>null);
  if(!Number.isInteger(body.expectedTotalCents)||body.expectedTotalCents!==quote.totalCents)throw failure(409,'PRICE_CHANGED');
  const client=await getPool().connect();let row;
  try{await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[data.requestId]);
@@ -44,11 +45,13 @@ async function beginCheckout(body){
    // One fleet lock across replicas protects overlapping tours, not just identical slots.
    await client.query('SELECT pg_advisory_xact_lock(78243191)');
    if((await client.query('SELECT date FROM blocked_dates WHERE date=$1',[data.date])).rows.length||await remaining(client,window)<1)throw failure(409,'SOLD_OUT');
+   try{await require('./operations-bookings').checkSeats(client,{window,carts:[{people:data.people}]});}catch(e){if(e.status===409)throw failure(409,'SOLD_OUT');throw e;}
    const id='MX'+crypto.randomUUID().replaceAll('-',''),token=crypto.randomBytes(32).toString('hex');
    const expires=new Date(Math.floor(Date.now()/1000)*1000+40*60000);
    const result=await client.query(`INSERT INTO bookings(id,name,email,phone,tour,people,date,time,notes,payment_method,status,amount,breakdown,channel,payment_status,access_token,start_at,end_at,checkout_state,checkout_expires_at,stripe_amount_cents)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'stripe','awaiting_payment',$10,$11,'maximo-web','unpaid',$12,$13,$14,'creating',$15,$16) RETURNING *`,
     [id,data.name,data.email,data.phone,quote.tourName,String(data.people),data.date,data.time,data.notes,quote.total,JSON.stringify({...quote,hotel:data.hotel,lang:data.lang,extraStops:data.extraStops,termsVersion:config.termsVersion,cancellationHours:24,acceptedAt:new Date().toISOString()}),token,window.start,window.end,expires,quote.totalCents]);row=result.rows[0];
+   if(attribution)await client.query('UPDATE bookings SET analytics_session=$2,acquisition_source=$3 WHERE id=$1',[id,attribution.sessionId,attribution.source]);
    await client.query('INSERT INTO request_keys(key,payload_hash,booking_id) VALUES($1,$2,$3)',[data.requestId,hash,id]);
   }
   await client.query('COMMIT');

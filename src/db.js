@@ -252,6 +252,12 @@ async function initDB() {
  next_attempt TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
  );`);
  await db.query(require('./payment-schema'));
+ await db.query(require('./operations-schema'));
+ await db.query(`INSERT INTO maximo_resources(id,kind,name,seats)
+ SELECT 'cart-'||LPAD(n::text,2,'0'),'vehicle','Golf cart '||n,7
+ FROM generate_series(1,$1::integer) n
+ WHERE NOT EXISTS (SELECT 1 FROM maximo_resources WHERE kind='vehicle')
+ ON CONFLICT(id) DO NOTHING`,[config.fleetSize]);
  await seed();dbReady=true;
 }
 

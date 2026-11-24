@@ -66,4 +66,5 @@ const bookingLimiter = makeRateLimiter({
   message: { error: 'Troppe richieste. Riprova tra un minuto.' },
 });
 
-module.exports = { getIP, adminAuth, userAuth, chatLimiter, loginLimiter, bookingLimiter };
+const analyticsLimiter=makeRateLimiter({windowMs:60000,max:120,message:{error:'Too many analytics events'}});
+module.exports = { getIP, adminAuth, userAuth, chatLimiter, loginLimiter, bookingLimiter,analyticsLimiter };

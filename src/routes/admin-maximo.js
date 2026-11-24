@@ -27,13 +27,14 @@ router.use('/ogre/api',wrap(async(req,res,next)=>{
  next();
 }));
 router.get('/ogre/api/session',(req,res)=>res.json({csrf:req.admin.csrf}));
+router.use('/ogre/api',require('./admin-operations'));
 router.post('/ogre/api/logout',wrap(async(req,res)=>{
  await getPool().query('DELETE FROM admin_sessions WHERE token_hash=$1',[req.admin.tokenHash]);res.clearCookie(cookieName,{...cookieOptions,maxAge:undefined});res.json({ok:true});
 }));
 router.get('/ogre/api/requests',wrap(async(req,res)=>{
  const offset=Math.max(0,Math.min(1000000,parseInt(req.query.offset)||0));
  const search=String(req.query.search||'').trim().slice(0,120),status=String(req.query.status||'');
- const result=await getPool().query(`SELECT id,name,email,phone,tour,people,date,time,start_at,notes,notes_admin,status,amount,payment_method,payment_status,stripe_payment_id,stripe_amount_cents,refunded_cents,cancellation_requested_at,refund_requested_at,checkout_state,breakdown,created_at,updated_at,
+ const result=await getPool().query(`SELECT id,name,email,phone,tour,people,date,time,start_at,notes,notes_admin,status,amount,payment_method,payment_status,stripe_payment_id,stripe_amount_cents,refunded_cents,cancellation_requested_at,refund_requested_at,checkout_state,breakdown,created_at,updated_at,cart_count,source_kind,source_label,
  COUNT(*) OVER() AS filtered_count FROM bookings WHERE channel='maximo-web'
  AND ($1='' OR name ILIKE '%'||$1||'%' OR email ILIKE '%'||$1||'%' OR id ILIKE '%'||$1||'%')
  AND ($2='' OR status=$2) ORDER BY date DESC,created_at DESC,id DESC LIMIT 50 OFFSET $3`,[search,status,offset]);
@@ -53,9 +54,15 @@ router.post('/ogre/api/requests/:id',wrap(async(req,res)=>{
  if(!['pending','awaiting_payment','confirmed','cancelled','completed'].includes(status)||!['unpaid','paid','refunded','partially_refunded','refund_pending','refund_failed'].includes(paymentStatus)||typeof notes!=='string'||notes.length>5000||!Number.isFinite(Date.parse(version)))return res.status(422).json({error:'Controlla stato, pagamento e note.'});
  const client=await getPool().connect();
  try{
-  await client.query('BEGIN');
+  await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(78243191)');
   const previous=await client.query("SELECT * FROM bookings WHERE id=$1 AND channel='maximo-web' FOR UPDATE",[req.params.id]);
   const old=previous.rows[0];if(!old){await client.query('ROLLBACK');return res.status(404).json({error:'Richiesta non trovata.'});}
+  if(old.payment_method!=='stripe'&&paymentStatus!==old.payment_status){await client.query('ROLLBACK');return res.status(409).json({error:'Per gli incassi usa Registra incasso. Il cambio di stato non esegue movimenti di denaro.'});}
+  if(['confirmed','completed'].includes(status)&&!['confirmed','completed'].includes(old.status)){
+   if(!old.start_at||!old.end_at){await client.query('ROLLBACK');return res.status(409).json({error:'Imposta prima data e orario con Modifica prenotazione.'});}
+   const carts=(await client.query('SELECT people,vehicle_id AS "vehicleId",driver_id AS "driverId" FROM maximo_assignments WHERE booking_id=$1 ORDER BY cart_index',[old.id])).rows;
+   await require('../services/operations-bookings').checkAvailability(client,{date:old.date,window:{start:old.start_at,end:old.end_at},carts:carts.length?carts:[{people:Number(old.people),vehicleId:'',driverId:''}]},old.id);
+  }
   if(old.payment_method==='stripe'&&(paymentStatus!==old.payment_status||(status!==old.status&&!(old.status==='confirmed'&&status==='completed')))){await client.query('ROLLBACK');return res.status(409).json({error:'I pagamenti Stripe si aggiornano automaticamente. Per annullare o rimborsare usa il flusso di cancellazione o Stripe.'});}
   if(new Date(old.updated_at).getTime()!==new Date(version).getTime()){await client.query('ROLLBACK');return res.status(409).json({error:'La richiesta è stata modificata. Ricarica e riprova.'});}
   const updated=await client.query('UPDATE bookings SET status=$1,payment_status=$2,notes_admin=$3,updated_at=NOW() WHERE id=$4 RETURNING updated_at',[status,paymentStatus,notes,req.params.id]);

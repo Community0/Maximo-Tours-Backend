@@ -20,6 +20,7 @@ app.use(cors({origin:(origin,cb)=>cb(null,config.corsOriginOk(origin)),methods:[
 // Verify Stripe's signature over the original bytes, before JSON parsing.
 app.post('/webhooks/stripe',express.raw({type:'application/json',limit:'1mb'}),asyncRoute(payments.webhook));
 app.use(express.json({limit:'24kb'}));
+app.post('/analytics/event',require('./middleware').analyticsLimiter,asyncRoute(async(req,res)=>res.json(await require('./services/traffic').record(req.body))));
 app.use(require('./routes/admin-maximo'));
 app.use('/ogre', (req,res,next)=>{res.set('X-Robots-Tag','noindex, nofollow');res.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");next();},express.static(require('node:path').join(__dirname,'../public/admin')));
 app.get('/booking/config',(req,res)=>res.json({paymentsEnabled:config.paymentReady(),timeZone:'Europe/Rome',cancellationHours:24,minimumNoticeHours:2,termsVersion:config.termsVersion}));
