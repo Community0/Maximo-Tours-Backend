@@ -1,24 +1,33 @@
-# Maximo Tours backend 1.2.0 — 17 novembre 2026
+# Maximo Tours backend 2.0.0 — 24 novembre 2026
 
-Backend Node 24 / Express / PostgreSQL per il frontend su Vercel. Stripe Checkout per il pagamento completo, conferma verificata lato server, email tramite Resend e gestionale protetto su `/ogre`.
+Node 24, Express e PostgreSQL per Maximo Tours. Frontend pubblico e Ogre su Vercel; API e database su Railway.
 
-**Leggere ATTIVAZIONE.md** per caricamento GitHub, variabili Railway, Stripe, email e collaudo reale.
+## Aggiornamento
 
-## Funzioni
+Leggi prima **AGGIORNAMENTO-2.0.md**. Carica il contenuto dello ZIP nella radice del repository backend, poi attendi il deploy Railway. Le modifiche al database sono additive: nessun reset delle prenotazioni. Le variabili esistenti restano valide.
 
-- Quattro tour privati; totale per gruppo: 320 EUR (1–3), 390 EUR (4), 470 EUR (5–7). Tappe extra per La Dolce Vita: 19,50 EUR.
-- Disponibilità di 8 golf cart con controllo delle sovrapposizioni in Europe/Rome. Partenze come nel backend Aura fornito, prenotazione almeno 2 ore prima.
-- Pagamenti idempotenti con la sola chiave segreta Stripe; controllo diretto di importo, valuta e prenotazione, verifica al ritorno e in background anche a browser chiuso. Webhook firmati facoltativi. Nessuna conferma basata soltanto sul ritorno del browser.
-- Richieste di cancellazione almeno 24 ore prima. **Nessun rimborso automatico.** Il gestionale richiede conferma esplicita dell’importo prima di inviarlo a Stripe.
-- Login admin, sessioni HttpOnly, CSRF, ricerca, note, calendario, stato pagamenti, rimborsi e coda email.
-- Email transazionali con link privato di gestione; dati carta gestiti da Stripe.
+## Cosa contiene
 
-## Comandi
+- Pagamento completo Stripe con verifica lato server, recupero in background, webhook facoltativo e conferme Resend.
+- Ogre con login, calendario partenze, rubrica autisti e mezzi, assegnazioni senza sovrapposizioni.
+- Prenotazioni manuali da telefono, WhatsApp, hotel, email, partner o di persona; più golf cart per gruppo.
+- Modifica data, orario, pickup, ospiti, lingua e note con controllo della disponibilità e dei posti reali.
+- Incassi esterni registrati manualmente; importi Stripe pagati protetti. Nessun addebito o rimborso automatico durante una modifica.
+- Report per data del tour, provenienza e itinerario, CSV e storico modifiche delle prenotazioni.
+- Coda email con stato del fornitore; statistiche interne di visite e conversioni solo con consenso.
+- Integrazione facoltativa in lettura con GA4 e Search Console. Proprietà GA4: **565751125**.
 
-`npm ci`, `npm test`, `npm start`.
+I rimborsi Stripe richiedono sempre conferma esplicita nel gestionale. La richiesta di cancellazione non avvia un rimborso.
 
-La variabile DATABASE_URL è obbligatoria per l’avvio. In produzione ADMIN_PASSWORD deve avere almeno 32 caratteri. Il contenuto di `.env.example` è solo una traccia: non contiene credenziali.
+Il checkout pubblico continua a prenotare un golf cart, da 1 a 7 ospiti. Gruppi più grandi si organizzano dal gestionale. I prezzi di listino per ciascun mezzo sono 320 € (1–3), 390 € (4), 470 € (5–7); 19,50 € per tappa extra Dolce Vita per mezzo. Un prezzo concordato diverso richiede un motivo.
 
-I test PostgreSQL usano PGlite. Stripe è simulato nei test e non viene contattato. Nessun test avvia pagamenti reali o invia email. Il test reale dell’account Stripe e della consegna email va eseguito prima dell’apertura degli incassi.
+## Documenti e avvio
 
-Le vecchie route Aura non sono montate dall’applicazione. Il pacchetto di distribuzione include solo i moduli usati dalla nuova applicazione Maximo.
+- **GUIDA-OGRE.md**: uso quotidiano e impostazione della flotta.
+- **GOOGLE-REPORTS.md**: accesso in sola lettura ai report Google.
+- **ATTIVAZIONE.md**, **VARIABILI.md**: impostazioni già esistenti Stripe, Resend e Railway.
+- **VERIFICHE.md**: prove eseguite e limiti.
+
+Esegui `npm ci`, `npm test`, `npm start`. Richiesti DATABASE_URL e, in produzione, ADMIN_PASSWORD di almeno 32 caratteri. Node 24 è dichiarato nei file di deploy. Nessuna chiave è inclusa nello ZIP.
+
+I test usano PostgreSQL/PGlite e Stripe simulato: non addebitano carte e non inviano email. Il pacchetto esclude le vecchie route Aura e i dati dell'ambiente locale.

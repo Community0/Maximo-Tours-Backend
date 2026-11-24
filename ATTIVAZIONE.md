@@ -1,4 +1,4 @@
-# Maximo Tours — attivazione 1.2.0, 17 novembre 2026
+# Maximo Tours — attivazione 1.2.1, 17 novembre 2026
 
 ## 1. GitHub e Railway
 
@@ -87,6 +87,6 @@ In Google Search Console aggiungi la proprietà dominio `maximotours.it`, verifi
 
 ## Collaudi ancora necessari nell’ambiente reale
 
-Il 17 novembre sono stati verificati online database, login/logout del gestionale, riepilogo admin e presenza della configurazione email. Restano da completare: deploy di questa versione 1.2.0, prova Stripe con l’account del titolare, recapito Resend, mailbox Aruba, Search Console e dispositivo iPhone reale. I test locali non sono pagamenti bancari e non certificano la consegna delle email o la fluidità su ogni dispositivo.
+Il 17 novembre sono stati verificati online database, login/logout del gestionale, riepilogo admin e presenza della configurazione email. Restano da completare: deploy di questa versione 1.2.1, prova Stripe con l’account del titolare, recapito Resend, mailbox Aruba, Search Console e dispositivo iPhone reale. I test locali non sono pagamenti bancari e non certificano la consegna delle email o la fluidità su ogni dispositivo.
 
 Fonti operative: https://docs.stripe.com/webhooks · https://docs.stripe.com/checkout/fulfillment · https://resend.com/docs/dashboard/domains/introduction · https://developers.google.com/search/docs/specialty/international/localized-versions

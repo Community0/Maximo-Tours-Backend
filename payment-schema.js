@@ -1,0 +1,24 @@
+module.exports=`
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS access_token TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS start_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS end_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_state TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_session_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_url TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS checkout_expires_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_amount_cents INTEGER;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS refunded_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_refund_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_checked_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS bookings_stripe_checked ON bookings(stripe_checked_at) WHERE payment_method='stripe';
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_access_token ON bookings(access_token);
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_stripe_session ON bookings(checkout_session_id);
+CREATE UNIQUE INDEX IF NOT EXISTS bookings_stripe_payment ON bookings(stripe_payment_id);
+CREATE INDEX IF NOT EXISTS bookings_time_window ON bookings(start_at,end_at);
+CREATE TABLE IF NOT EXISTS stripe_events(id TEXT PRIMARY KEY,type TEXT NOT NULL,processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+ALTER TABLE notification_outbox ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'request';
+ALTER TABLE notification_outbox ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'admin';
+`;
